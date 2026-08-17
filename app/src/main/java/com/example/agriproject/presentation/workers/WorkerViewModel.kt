@@ -3,14 +3,15 @@ package com.example.agriproject.presentation.workers
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.agriproject.data.model.Worker
+import com.example.agriproject.data.repository.UserRepository
+import com.example.agriproject.data.repository.WorkerRepository
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import java.util.UUID
 
 data class WorkerRegistrationState(
     val isLoading: Boolean = false,
@@ -20,8 +21,9 @@ data class WorkerRegistrationState(
 
 class WorkerViewModel : ViewModel() {
     private val auth = FirebaseAuth.getInstance()
-    private val firestore = FirebaseFirestore.getInstance()
     private val storage = FirebaseStorage.getInstance()
+    private val workerRepository = WorkerRepository()
+    private val userRepository = UserRepository()
 
     private val _state = MutableStateFlow(WorkerRegistrationState())
     val state = _state.asStateFlow()
@@ -57,27 +59,23 @@ class WorkerViewModel : ViewModel() {
                     aadhaarUrl = ref.downloadUrl.await().toString()
                 }
 
-                val workerData = hashMapOf(
-                    "uid" to userId,
-                    "name" to name,
-                    "age" to age,
-                    "experience" to experience,
-                    "skills" to skills,
-                    "languages" to languages,
-                    "dailyWage" to dailyWage,
-                    "availableDays" to availableDays,
-                    "location" to location,
-                    "photoUrl" to photoUrl,
-                    "aadhaarUrl" to aadhaarUrl,
-                    "role" to "Worker",
-                    "isVerified" to false,
-                    "createdAt" to System.currentTimeMillis()
+                val worker = Worker(
+                    id = userId,
+                    name = name,
+                    skill = skills.joinToString(", "),
+                    experience = experience,
+                    contact = auth.currentUser?.phoneNumber ?: "",
+                    location = location,
+                    dailyWage = dailyWage.toDoubleOrNull() ?: 0.0,
+                    profileImageUrl = photoUrl
                 )
 
-                firestore.collection("workers").document(userId).set(workerData).await()
-                firestore.collection("users").document(userId).update("role", "Worker")
-
-                _state.value = WorkerRegistrationState(isSuccess = true)
+                workerRepository.registerWorker(worker).onSuccess {
+                    userRepository.updateUserRole(userId, "Worker")
+                    _state.value = WorkerRegistrationState(isSuccess = true)
+                }.onFailure { e ->
+                    _state.value = WorkerRegistrationState(error = e.localizedMessage)
+                }
             } catch (e: Exception) {
                 _state.value = WorkerRegistrationState(error = e.localizedMessage)
             }

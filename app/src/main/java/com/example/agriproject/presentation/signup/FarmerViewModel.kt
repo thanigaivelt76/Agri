@@ -3,14 +3,14 @@ package com.example.agriproject.presentation.signup
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.agriproject.data.model.User
+import com.example.agriproject.data.repository.UserRepository
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import java.util.UUID
 
 data class FarmerRegistrationState(
     val isLoading: Boolean = false,
@@ -20,8 +20,8 @@ data class FarmerRegistrationState(
 
 class FarmerViewModel : ViewModel() {
     private val auth = FirebaseAuth.getInstance()
-    private val firestore = FirebaseFirestore.getInstance()
     private val storage = FirebaseStorage.getInstance()
+    private val userRepository = UserRepository()
 
     private val _state = MutableStateFlow(FarmerRegistrationState())
     val state = _state.asStateFlow()
@@ -31,7 +31,7 @@ class FarmerViewModel : ViewModel() {
         mobileNumber: String,
         email: String,
         password: String,
-        state: String,
+        stateName: String,
         district: String,
         village: String,
         pincode: String,
@@ -57,29 +57,24 @@ class FarmerViewModel : ViewModel() {
                     imageUrl = ref.downloadUrl.await().toString()
                 }
 
-                // 3. Prepare Farmer Data
-                val farmerData = hashMapOf(
-                    "uid" to userId,
-                    "fullName" to fullName,
-                    "mobileNumber" to mobileNumber,
-                    "email" to email,
-                    "state" to state,
-                    "district" to district,
-                    "village" to village,
-                    "pincode" to pincode,
-                    "farmSize" to farmSize,
-                    "cropType" to cropType,
-                    "latitude" to location?.first,
-                    "longitude" to location?.second,
-                    "profileImageUrl" to imageUrl,
-                    "role" to "Farmer",
-                    "createdAt" to System.currentTimeMillis()
+                // 3. Prepare User Object
+                val user = User(
+                    uid = userId,
+                    name = fullName,
+                    email = email,
+                    phoneNumber = mobileNumber,
+                    role = "Farmer",
+                    location = "$village, $district, $stateName",
+                    profileImageUrl = imageUrl
                 )
 
-                // 4. Save to Firestore
-                firestore.collection("users").document(userId).set(farmerData).await()
+                // 4. Save using Repository
+                userRepository.saveUser(user).onSuccess {
+                    _state.value = FarmerRegistrationState(isSuccess = true)
+                }.onFailure { e ->
+                    _state.value = FarmerRegistrationState(error = e.localizedMessage)
+                }
 
-                _state.value = FarmerRegistrationState(isSuccess = true)
             } catch (e: Exception) {
                 _state.value = FarmerRegistrationState(error = e.localizedMessage)
             }

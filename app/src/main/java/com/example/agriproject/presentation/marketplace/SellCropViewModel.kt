@@ -3,8 +3,9 @@ package com.example.agriproject.presentation.marketplace
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.agriproject.data.model.Crop
+import com.example.agriproject.data.repository.CropRepository
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,8 +21,8 @@ data class SellCropState(
 
 class SellCropViewModel : ViewModel() {
     private val auth = FirebaseAuth.getInstance()
-    private val firestore = FirebaseFirestore.getInstance()
     private val storage = FirebaseStorage.getInstance()
+    private val cropRepository = CropRepository()
 
     private val _state = MutableStateFlow(SellCropState())
     val state = _state.asStateFlow()
@@ -52,28 +53,29 @@ class SellCropViewModel : ViewModel() {
                     imageUrl = ref.downloadUrl.await().toString()
                 }
 
-                // 2. Prepare Crop Data
-                val cropData = hashMapOf(
-                    "name" to cropName,
-                    "category" to category,
-                    "quantity" to quantity,
-                    "unit" to unit,
-                    "price" to price,
-                    "harvestDate" to harvestDate,
-                    "location" to location,
-                    "description" to description,
-                    "quality" to quality,
-                    "isOrganic" to isOrganic,
-                    "imageUrl" to imageUrl,
-                    "farmerId" to auth.currentUser?.uid,
-                    "farmerName" to (auth.currentUser?.displayName ?: "Farmer"),
-                    "createdAt" to System.currentTimeMillis()
+                // 2. Prepare Crop Object
+                val crop = Crop(
+                    name = cropName,
+                    category = category,
+                    quantity = quantity,
+                    unit = unit,
+                    price = price,
+                    harvestDate = harvestDate,
+                    location = location,
+                    description = description,
+                    quality = quality,
+                    isOrganic = isOrganic,
+                    imageUrl = imageUrl,
+                    farmerId = auth.currentUser?.uid ?: "",
+                    farmerName = auth.currentUser?.displayName ?: "Farmer"
                 )
 
-                // 3. Save to Firestore
-                firestore.collection("crops").add(cropData).await()
-
-                _state.value = SellCropState(isSuccess = true)
+                // 3. Save using Repository
+                cropRepository.addCrop(crop).onSuccess {
+                    _state.value = SellCropState(isSuccess = true)
+                }.onFailure { e ->
+                    _state.value = SellCropState(error = e.localizedMessage)
+                }
             } catch (e: Exception) {
                 _state.value = SellCropState(error = e.localizedMessage)
             }
