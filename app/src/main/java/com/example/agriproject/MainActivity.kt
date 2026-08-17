@@ -85,7 +85,7 @@ fun UzhavuThozhanApp(
     
     // Google Sign-In Setup
     val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-        .requestIdToken("YOUR_WEB_CLIENT_ID_HERE") // Replace with actual Web Client ID from Firebase
+        .requestIdToken("171884000943-9sqddu36j8kk1cqt750lrr4ol2vnm5o9.apps.googleusercontent.com")
         .requestEmail()
         .build()
     val googleSignInClient = GoogleSignIn.getClient(context, gso)
