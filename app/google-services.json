@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "184714741714",
-    "project_id": "agroconnect-fade9",
-    "storage_bucket": "agroconnect-fade9.firebasestorage.app"
+    "project_number": "171884000943",
+    "project_id": "agriproject-a57cd",
+    "storage_bucket": "agriproject-a57cd.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:184714741714:android:e47fbe9cd947a09e95ea0b",
+        "mobilesdk_app_id": "1:171884000943:android:c5b1c1a9c59d6261fdc65a",
         "android_client_info": {
           "package_name": "com.example.agriproject"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDs-dXYDqQFi3iVjXw-MNQri7gWv2-Q7y4"
+          "current_key": "AIzaSyCc8z_D7HELSpIEh6z9eXm9ObClZ2PtaFQ"
         }
       ],
       "services": {
