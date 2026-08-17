@@ -65,6 +65,11 @@ fun ProfileScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = null)
                     }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.logout() }) {
+                        Icon(Icons.Outlined.Logout, contentDescription = "Logout", tint = Color.Red)
+                    }
                 }
             )
         }
@@ -167,6 +172,22 @@ fun ProfileScreen(
             SettingsSection("Account Action") {
                 ProfileMenuItem(Icons.Outlined.Logout, "Logout", textColor = Color.Red, onClick = { viewModel.logout() })
                 ProfileMenuItem(Icons.Outlined.DeleteForever, "Delete Account", textColor = Color.Red, onClick = { showDeleteDialog = true })
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = { viewModel.logout() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFEBEE), contentColor = Color.Red),
+                shape = RoundedCornerShape(12.dp),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+            ) {
+                Icon(Icons.Default.Logout, null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Log Out", fontWeight = FontWeight.Bold)
             }
             
             Spacer(modifier = Modifier.height(32.dp))
