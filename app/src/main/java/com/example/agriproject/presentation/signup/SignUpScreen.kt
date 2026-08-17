@@ -145,12 +145,18 @@ fun SignUpScreen(
                     shape = RoundedCornerShape(12.dp)
                 )
 
+                var confirmPasswordVisible by remember { mutableStateOf(false) }
                 OutlinedTextField(
                     value = confirmPassword,
                     onValueChange = { confirmPassword = it },
                     label = { Text("Confirm Password") },
                     leadingIcon = { Icon(Icons.Default.Lock, null) },
-                    visualTransformation = PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
+                            Icon(if (confirmPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, null)
+                        }
+                    },
+                    visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -192,7 +198,7 @@ fun SignUpScreen(
                 } else {
                     Button(
                         onClick = {
-                            if (password == confirmPassword) {
+                            if (password.isNotEmpty() && password == confirmPassword) {
                                 viewModel.registerFarmer(
                                     fullName, mobileNumber, email, password, state, district, village, 
                                     pincode, farmSize, cropType, 
@@ -200,14 +206,14 @@ fun SignUpScreen(
                                     profileImageUri
                                 )
                             } else {
-                                // Simple error handling for UI
+                                // Error feedback would go here
                             }
                         },
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Submit Registration", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Text("Create Account", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
