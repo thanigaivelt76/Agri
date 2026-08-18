@@ -1,5 +1,8 @@
 package com.example.agriproject.presentation.machinery
 
+import android.Manifest
+import android.content.Context
+import android.location.Geocoder
 import android.net.Uri
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -31,6 +34,7 @@ import coil.compose.AsyncImage
 import com.example.agriproject.data.model.Machinery
 import com.example.agriproject.data.repository.MachineryRepository
 import com.example.agriproject.ui.theme.GreenPrimary
+import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.firebase.auth.FirebaseAuth
@@ -40,6 +44,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import java.util.Locale
 import java.util.UUID
 
 class AddMachineryViewModel : ViewModel() {
@@ -70,18 +75,19 @@ class AddMachineryViewModel : ViewModel() {
             try {
                 var imageUrl: String? = null
                 
-                // Fix: Only attempt upload if imageUri is NOT null
                 if (imageUri != null) {
                     try {
                         val fileName = "machinery_images/${UUID.randomUUID()}.jpg"
                         val ref = storage.reference.child(fileName)
                         Log.d(TAG, "Uploading image to: $fileName")
-                        ref.putFile(imageUri).await()
+                        
+                        // Use putFile with simplified metadata
+                        val uploadTask = ref.putFile(imageUri).await()
                         imageUrl = ref.downloadUrl.await().toString()
                         Log.d(TAG, "Upload success. URL: $imageUrl")
                     } catch (e: Exception) {
-                        Log.e(TAG, "Storage error", e)
-                        throw Exception("Image upload failed. Please check your internet connection.")
+                        Log.e(TAG, "Storage error: ${e.message}", e)
+                        throw Exception("Image upload failed. Please ensure you have a stable internet connection and Firebase Storage is enabled.")
                     }
                 }
 
@@ -101,16 +107,12 @@ class AddMachineryViewModel : ViewModel() {
                     description = description
                 )
 
-                Log.d(TAG, "Saving machinery to Firestore")
                 repository.addMachinery(machinery).onSuccess {
-                    Log.d(TAG, "Save success")
                     _state.value = _state.value.copy(isLoading = false, isSuccess = true)
                 }.onFailure { e ->
-                    Log.e(TAG, "Firestore error", e)
-                    _state.value = _state.value.copy(isLoading = false, error = "Failed to save: ${e.localizedMessage}")
+                    _state.value = _state.value.copy(isLoading = false, error = "Failed to save details: ${e.localizedMessage}")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "General error", e)
                 _state.value = _state.value.copy(isLoading = false, error = e.localizedMessage)
             }
         }
@@ -132,6 +134,7 @@ fun AddMachineryScreen(
     val viewModel: AddMachineryViewModel = viewModel()
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     var machineType by remember { mutableStateOf("Tractor") }
     var machineName by remember { mutableStateOf("") }
@@ -145,6 +148,34 @@ fun AddMachineryScreen(
     var address by remember { mutableStateOf("") }
     var showMapPicker by remember { mutableStateOf(false) }
 
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            try {
+                fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                    location?.let {
+                        latitude = it.latitude
+                        longitude = it.longitude
+                        
+                        val geocoder = Geocoder(context, Locale.getDefault())
+                        val addresses = geocoder.getFromLocation(it.latitude, it.longitude, 1)
+                        if (addresses?.isNotEmpty() == true) {
+                            val addr = addresses[0]
+                            val city = addr.locality ?: addr.subAdminArea ?: ""
+                            val state = addr.adminArea ?: ""
+                            address = if (city.isNotEmpty()) "$city, $state" else state
+                        } else {
+                            address = "${"%.4f".format(latitude)}, ${"%.4f".format(longitude)}"
+                        }
+                    }
+                }
+            } catch (e: SecurityException) {
+                Log.e("AddMachinery", "Permission error", e)
+            }
+        }
+    }
+
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { imageUri = it }
 
     LaunchedEffect(state.isSuccess) {
@@ -156,7 +187,17 @@ fun AddMachineryScreen(
             onLocationSelected = { latLng ->
                 latitude = latLng.latitude
                 longitude = latLng.longitude
-                address = "Selected Location (Map)"
+                
+                val geocoder = Geocoder(context, Locale.getDefault())
+                val addresses = geocoder.getFromLocation(latLng.latitude, latLng.longitude, 1)
+                if (addresses?.isNotEmpty() == true) {
+                    val addr = addresses[0]
+                    val city = addr.locality ?: addr.subAdminArea ?: ""
+                    val state = addr.adminArea ?: ""
+                    address = if (city.isNotEmpty()) "$city, $state" else state
+                } else {
+                    address = "Manual Location Selected"
+                }
                 showMapPicker = false
             },
             onDismiss = { showMapPicker = false }
@@ -231,9 +272,7 @@ fun AddMachineryScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = { 
-                            latitude = 11.0168
-                            longitude = 76.9558
-                            address = "Coimbatore, Tamil Nadu"
+                            permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                         },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE8F5E9), contentColor = GreenPrimary),
