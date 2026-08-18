@@ -298,7 +298,7 @@ fun UzhavuThozhanApp(
         composable("owner_dashboard") {
             OwnerDashboardScreen(
                 onBack = { navController.popBackStack() },
-                onAddMachine = { /* Navigate to Add Machine */ },
+                onAddMachine = { navController.navigate("add_machinery") },
                 onEditMachine = { id -> /* Navigate to Edit Machine */ }
             )
         }
