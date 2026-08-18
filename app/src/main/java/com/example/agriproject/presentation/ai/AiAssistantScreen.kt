@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,9 +21,11 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.example.agriproject.ui.theme.GreenPrimary
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,7 +47,7 @@ fun AiAssistantScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("AI Crop Health Assistant", fontWeight = FontWeight.Bold) },
+                title = { Text("AI Crop Assistant", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = null)
@@ -61,22 +64,25 @@ fun AiAssistantScreen(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                "Upload a clear photo of the crop leaf to detect diseases using AI.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.Gray,
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
+            if (state.result == null) {
+                Text(
+                    "Upload a clear photo of the crop leaf to detect diseases and get treatment recommendations.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = 24.dp)
+                )
+            }
 
             // Image Selection Area
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(280.dp)
+                    .height(if (state.result == null) 280.dp else 200.dp)
                     .clip(RoundedCornerShape(24.dp))
                     .background(Color(0xFFF5F5F5))
                     .border(2.dp, GreenPrimary.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
-                    .clickable { launcher.launch("image/*") },
+                    .clickable(enabled = !state.isLoading) { launcher.launch("image/*") },
                 contentAlignment = Alignment.Center
             ) {
                 if (state.capturedImage != null) {
@@ -104,13 +110,19 @@ fun AiAssistantScreen(
                         Text("Tap to Select Leaf Image", color = GreenPrimary, fontWeight = FontWeight.Bold)
                     }
                 }
-                
+
                 if (state.isLoading) {
                     Box(
-                        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.6f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(color = Color.White)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(color = Color.White)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(state.loadingMessage, color = Color.White, fontWeight = FontWeight.Medium)
+                        }
                     }
                 }
             }
@@ -122,24 +134,30 @@ fun AiAssistantScreen(
                 enter = fadeIn() + expandVertically()
             ) {
                 state.result?.let { result ->
-                    ResultSection(result)
+                    ResultSection(result, onReset = { viewModel.resetState() })
                 }
             }
 
             if (state.error != null) {
-                Text(state.error!!, color = Color.Red, modifier = Modifier.padding(top = 16.dp))
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            if (state.result != null) {
-                Button(
-                    onClick = { viewModel.resetState() },
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                Surface(
+                    color = Color(0xFFFFEBEE),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray)
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
                 ) {
-                    Text("Analyze Another Leaf", color = Color.Black)
+                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Error, contentDescription = null, tint = Color.Red)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(state.error!!, color = Color.Red, fontSize = 14.sp)
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(
+                    onClick = { launcher.launch("image/*") },
+                    colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Try Another Image")
                 }
             }
         }
@@ -147,70 +165,93 @@ fun AiAssistantScreen(
 }
 
 @Composable
-fun ResultSection(result: DetectionResult) {
+fun ResultSection(result: DetectionResult, onReset: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        // Diagnosis Card
+        // Diagnosis Header Card
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = GreenPrimary.copy(alpha = 0.05f))
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = if (result.diseaseName == "Healthy") Color(0xFFE8F5E9) else Color(0xFFFFF3F3))
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
+            Column(modifier = Modifier.padding(24.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Diagnosis", fontWeight = FontWeight.Bold, color = GreenPrimary)
+                    Text(result.status, fontWeight = FontWeight.Bold, color = if (result.diseaseName == "Healthy") GreenPrimary else Color(0xFFD32F2F))
                     Surface(
-                        color = GreenPrimary,
+                        color = if (result.diseaseName == "Healthy") GreenPrimary else Color(0xFFD32F2F),
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text(
-                            "${(result.confidence * 100).toInt()}% Confidence",
+                            "${result.confidence}% Confidence",
                             color = Color.White,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
                 }
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     result.diseaseName,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.ExtraBold,
-                    color = if (result.diseaseName == "Healthy") GreenPrimary else Color(0xFFD32F2F)
+                    color = if (result.diseaseName == "Healthy") GreenPrimary else Color(0xFFB71C1C)
                 )
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Treatment & Recommendations
-        ResultItem(Icons.Default.Healing, "Treatment Plan", result.treatment)
-        ResultItem(Icons.Default.Science, "Suggested Fertilizer", result.suggestedFertilizer)
-        ResultItem(Icons.Default.Store, "Nearby Agriculture Shop", result.nearbyShop)
+        // Detailed Info Sections
+        ResultDetailCard(Icons.Default.Visibility, "Symptoms", result.symptoms)
+        ResultDetailCard(Icons.Default.Healing, "Recommended Treatment", result.treatment)
+        ResultDetailCard(Icons.Default.Shield, "Prevention Tips", result.prevention)
+
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        Button(
+            onClick = onReset,
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary)
+        ) {
+            Icon(Icons.Default.Refresh, null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Analyze Another Leaf", fontWeight = FontWeight.Bold)
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
 @Composable
-fun ResultItem(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, content: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.Top
+fun ResultDetailCard(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, content: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, Color.LightGray.copy(alpha = 0.3f))
     ) {
-        Surface(
-            modifier = Modifier.size(40.dp),
-            shape = CircleShape,
-            color = Color(0xFFF5F5F5)
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.Top
         ) {
-            Icon(icon, null, modifier = Modifier.padding(10.dp), tint = Color.Gray)
-        }
-        Spacer(modifier = Modifier.width(16.dp))
-        Column {
-            Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            Text(content, color = Color.Gray, fontSize = 14.sp, lineHeight = 20.sp)
+            Surface(
+                modifier = Modifier.size(36.dp),
+                shape = CircleShape,
+                color = GreenPrimary.copy(alpha = 0.1f)
+            ) {
+                Icon(icon, null, modifier = Modifier.padding(8.dp), tint = GreenPrimary)
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.Black)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(content, color = Color.DarkGray, fontSize = 14.sp, lineHeight = 20.sp)
+            }
         }
     }
 }
