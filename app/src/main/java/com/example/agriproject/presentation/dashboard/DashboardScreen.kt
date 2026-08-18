@@ -160,6 +160,11 @@ fun DashboardScreen(
                     AICropAssistantCard(onClick = onAiAssistantClick)
                 }
 
+                // Rent Machinery Card
+                item {
+                    RentMachineryCard(onClick = onMachineryClick)
+                }
+
                 // Voice Assistant Card
                 item {
                     VoiceAssistantCard()
@@ -224,6 +229,50 @@ fun WeatherInfo(icon: ImageVector, text: String) {
         Icon(icon, contentDescription = null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(14.dp))
         Spacer(modifier = Modifier.width(4.dp))
         Text(text, color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
+    }
+}
+
+@Composable
+fun RentMachineryCard(onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD)),
+        border = BorderStroke(1.dp, Color(0xFF2196F3).copy(alpha = 0.2f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    modifier = Modifier.size(40.dp),
+                    shape = CircleShape,
+                    color = Color(0xFF2196F3).copy(alpha = 0.1f)
+                ) {
+                    Icon(Icons.Default.Agriculture, null, tint = Color(0xFF1976D2), modifier = Modifier.padding(8.dp))
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Text("Rent Machinery", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Find and book agricultural equipment nearby", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(
+                "Rent tractors, harvesters, and more at the best prices directly from owners.",
+                color = Color.Gray,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = onClick,
+                modifier = Modifier.align(Alignment.End),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2)),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Rent Machine")
+            }
+        }
     }
 }
 
