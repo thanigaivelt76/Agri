@@ -1,6 +1,7 @@
 package com.example.agriproject.presentation.machinery
 
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
@@ -49,6 +50,8 @@ class AddMachineryViewModel : ViewModel() {
     private val _state = MutableStateFlow(AddMachineryState())
     val state = _state.asStateFlow()
 
+    private val TAG = "AddMachineryViewModel"
+
     fun addMachinery(
         type: String,
         name: String,
@@ -66,11 +69,20 @@ class AddMachineryViewModel : ViewModel() {
             _state.value = _state.value.copy(isLoading = true)
             try {
                 var imageUrl: String? = null
-                imageUri?.let {
-                    val fileName = "machinery_images/${UUID.randomUUID()}.jpg"
-                    val ref = storage.reference.child(fileName)
-                    ref.putFile(it).await()
-                    imageUrl = ref.downloadUrl.await().toString()
+                
+                // Fix: Only attempt upload if imageUri is NOT null
+                if (imageUri != null) {
+                    try {
+                        val fileName = "machinery_images/${UUID.randomUUID()}.jpg"
+                        val ref = storage.reference.child(fileName)
+                        Log.d(TAG, "Uploading image to: $fileName")
+                        ref.putFile(imageUri).await()
+                        imageUrl = ref.downloadUrl.await().toString()
+                        Log.d(TAG, "Upload success. URL: $imageUrl")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Storage error", e)
+                        throw Exception("Image upload failed. Please check your internet connection.")
+                    }
                 }
 
                 val machinery = Machinery(
@@ -89,12 +101,16 @@ class AddMachineryViewModel : ViewModel() {
                     description = description
                 )
 
+                Log.d(TAG, "Saving machinery to Firestore")
                 repository.addMachinery(machinery).onSuccess {
+                    Log.d(TAG, "Save success")
                     _state.value = _state.value.copy(isLoading = false, isSuccess = true)
                 }.onFailure { e ->
-                    _state.value = _state.value.copy(isLoading = false, error = e.localizedMessage)
+                    Log.e(TAG, "Firestore error", e)
+                    _state.value = _state.value.copy(isLoading = false, error = "Failed to save: ${e.localizedMessage}")
                 }
             } catch (e: Exception) {
+                Log.e(TAG, "General error", e)
                 _state.value = _state.value.copy(isLoading = false, error = e.localizedMessage)
             }
         }
@@ -278,6 +294,12 @@ fun AddMachineryScreen(
                         onClick = {
                             if (machineName.isNotEmpty() && price.isNotEmpty() && latitude != 0.0) {
                                 viewModel.addMachinery(machineType, machineName, regNumber, price, unit, description, imageUri, latitude, longitude, address)
+                            } else {
+                                // Explicitly check for location
+                                if (latitude == 0.0) {
+                                    // Normally you'd show a Snackbar here
+                                    Log.e("AddMachinery", "Location not selected")
+                                }
                             }
                         },
                         modifier = Modifier.fillMaxWidth().height(56.dp),
