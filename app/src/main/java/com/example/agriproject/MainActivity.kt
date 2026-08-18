@@ -154,17 +154,13 @@ fun UzhavuThozhanApp(
             )
         }
         composable("dashboard") {
-            val userName = currentUser?.displayName ?: "Farmer"
             DashboardScreen(
-                userName = userName,
                 onMachineryClick = { navController.navigate("machinery") },
                 onWorkersClick = { navController.navigate("workers") },
                 onMarketplaceClick = { navController.navigate("marketplace") },
                 onProfileClick = { navController.navigate("profile") },
-                onSellCropsClick = { navController.navigate("sell_crop") },
                 onAiAssistantClick = { navController.navigate("ai_assistant") },
                 onVoiceAssistantClick = { navController.navigate("voice_assistant") },
-                onOrderClick = { id -> navController.navigate("order_tracking/$id") },
                 onNotificationsClick = { navController.navigate("notifications") },
                 onAdminClick = { navController.navigate("admin_dashboard") },
                 onWeatherClick = { navController.navigate("weather") },
