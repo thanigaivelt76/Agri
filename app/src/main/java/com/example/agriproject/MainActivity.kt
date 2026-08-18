@@ -15,6 +15,8 @@ import com.example.agriproject.presentation.dashboard.DashboardScreen
 import com.example.agriproject.presentation.login.LoginScreen
 import com.example.agriproject.presentation.machinery.MachineryMapScreen
 import com.example.agriproject.presentation.machinery.MachineryDetailScreen
+import com.example.agriproject.presentation.machinery.AddMachineryScreen
+import com.example.agriproject.presentation.machinery.MachineryBookingScreen
 import com.example.agriproject.presentation.owner.OwnerDashboardScreen
 import com.example.agriproject.presentation.workers.WorkersScreen
 import com.example.agriproject.presentation.workers.WorkerDetailScreen
@@ -170,7 +172,14 @@ fun UzhavuThozhanApp(
         composable("machinery") {
             MachineryMapScreen(
                 onBack = { navController.popBackStack() },
-                onSeeDetails = { id -> navController.navigate("machinery_detail/$id") }
+                onSeeDetails = { id -> navController.navigate("machinery_detail/$id") },
+                onAddMachinery = { navController.navigate("add_machinery") }
+            )
+        }
+        composable("add_machinery") {
+            AddMachineryScreen(
+                onBack = { navController.popBackStack() },
+                onSuccess = { navController.popBackStack() }
             )
         }
         composable("machinery_detail/{machineId}") { backStackEntry ->
@@ -181,6 +190,18 @@ fun UzhavuThozhanApp(
                 onNavigateToMap = { navController.navigate("machinery") },
                 onBookClick = { route ->
                     navController.navigate(route)
+                }
+            )
+        }
+        composable("machinery_booking/{machineId}") { backStackEntry ->
+            val machineId = backStackEntry.arguments?.getString("machineId") ?: ""
+            MachineryBookingScreen(
+                machineId = machineId,
+                onBack = { navController.popBackStack() },
+                onSuccess = {
+                    navController.navigate("dashboard") {
+                        popUpTo("dashboard") { inclusive = true }
+                    }
                 }
             )
         }
