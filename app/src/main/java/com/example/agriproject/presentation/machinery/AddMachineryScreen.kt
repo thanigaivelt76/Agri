@@ -30,8 +30,11 @@ import coil.compose.AsyncImage
 import com.example.agriproject.data.model.Machinery
 import com.example.agriproject.data.repository.MachineryRepository
 import com.example.agriproject.ui.theme.GreenPrimary
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.storage.FirebaseStorage
+import com.google.maps.android.compose.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -64,7 +67,8 @@ class AddMachineryViewModel : ViewModel() {
             try {
                 var imageUrl: String? = null
                 imageUri?.let {
-                    val ref = storage.reference.child("machinery_images/${UUID.randomUUID()}.jpg")
+                    val fileName = "machinery_images/${UUID.randomUUID()}.jpg"
+                    val ref = storage.reference.child(fileName)
                     ref.putFile(it).await()
                     imageUrl = ref.downloadUrl.await().toString()
                 }
@@ -120,135 +124,203 @@ fun AddMachineryScreen(
     var unit by remember { mutableStateOf("Per Hour") }
     var description by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
-    var latitude by remember { mutableDoubleStateOf(11.0168) }
-    var longitude by remember { mutableDoubleStateOf(76.9558) }
-    var address by remember { mutableStateOf("Coimbatore, TN") }
-    
+    var latitude by remember { mutableDoubleStateOf(0.0) }
+    var longitude by remember { mutableDoubleStateOf(0.0) }
+    var address by remember { mutableStateOf("") }
+    var showMapPicker by remember { mutableStateOf(false) }
+
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { imageUri = it }
 
     LaunchedEffect(state.isSuccess) {
         if (state.isSuccess) onSuccess()
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Add Machinery", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
-                }
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Image Picker
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFFF5F5F5))
-                    .clickable { launcher.launch("image/*") },
-                contentAlignment = Alignment.Center
-            ) {
-                if (imageUri != null) {
-                    AsyncImage(model = imageUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                } else {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.AddAPhoto, null, tint = GreenPrimary, modifier = Modifier.size(48.dp))
-                        Text("Add Machine Photo", color = GreenPrimary)
+    if (showMapPicker) {
+        MapPicker(
+            onLocationSelected = { latLng ->
+                latitude = latLng.latitude
+                longitude = latLng.longitude
+                address = "Selected Location (Map)"
+                showMapPicker = false
+            },
+            onDismiss = { showMapPicker = false }
+        )
+    } else {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Add Machinery", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
                     }
-                }
-            }
-
-            // Form
-            Text("Machine Information", fontWeight = FontWeight.Bold)
-            var expanded by remember { mutableStateOf(false) }
-            val types = listOf("Tractor", "Harvester", "Rotavator", "Cultivator", "Seeder", "Sprayer", "Power Tiller", "Other")
-            
-            ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
-                OutlinedTextField(
-                    value = machineType,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Machine Type") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    modifier = Modifier.fillMaxWidth().menuAnchor(),
-                    shape = RoundedCornerShape(12.dp)
                 )
-                ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    types.forEach { type ->
-                        DropdownMenuItem(text = { Text(type) }, onClick = { machineType = type; expanded = false })
-                    }
-                }
             }
-
-            OutlinedTextField(value = machineName, onValueChange = { machineName = it }, label = { Text("Machine Name") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
-            OutlinedTextField(value = regNumber, onValueChange = { regNumber = it }, label = { Text("Registration Number") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
-            
-            Text("Location", fontWeight = FontWeight.Bold)
-            OutlinedCard(
-                onClick = { /* Simple prompt for demo */ address = "Current Location Detected" },
-                modifier = Modifier.fillMaxWidth()
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .padding(padding)
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.MyLocation, null, tint = GreenPrimary)
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(address)
-                }
-            }
-
-            Text("Rental Details", fontWeight = FontWeight.Bold)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(value = price, onValueChange = { price = it }, label = { Text("Price (₹)") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(12.dp))
-                
-                var unitExpanded by remember { mutableStateOf(false) }
-                val units = listOf("Per Hour", "Half Day", "Full Day")
-                ExposedDropdownMenuBox(expanded = unitExpanded, onExpandedChange = { unitExpanded = !unitExpanded }, modifier = Modifier.weight(1f)) {
-                    OutlinedTextField(
-                        value = unit,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Unit") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = unitExpanded) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    ExposedDropdownMenu(expanded = unitExpanded, onDismissRequest = { unitExpanded = false }) {
-                        units.forEach { u ->
-                            DropdownMenuItem(text = { Text(u) }, onClick = { unit = u; unitExpanded = false })
+                // Image Picker
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFFF5F5F5))
+                        .border(1.dp, Color.LightGray, RoundedCornerShape(16.dp))
+                        .clickable { launcher.launch("image/*") },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (imageUri != null) {
+                        AsyncImage(model = imageUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    } else {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.AddAPhoto, null, tint = GreenPrimary, modifier = Modifier.size(48.dp))
+                            Text("Add Machine Photo", color = GreenPrimary)
                         }
                     }
                 }
-            }
 
-            OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description") }, modifier = Modifier.fillMaxWidth().height(120.dp), shape = RoundedCornerShape(12.dp))
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (state.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally), color = GreenPrimary)
-            } else {
-                Button(
-                    onClick = {
-                        viewModel.addMachinery(machineType, machineName, regNumber, price, unit, description, imageUri, latitude, longitude, address)
-                    },
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("List Machinery", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                // Form
+                Text("Machine Information", fontWeight = FontWeight.Bold, color = GreenPrimary)
+                
+                var expanded by remember { mutableStateOf(false) }
+                val types = listOf("Tractor", "Harvester", "Rotavator", "Cultivator", "Seeder", "Sprayer", "Power Tiller", "Other")
+                
+                ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
+                    OutlinedTextField(
+                        value = machineType,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Machine Type") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        types.forEach { type ->
+                            DropdownMenuItem(text = { Text(type) }, onClick = { machineType = type; expanded = false })
+                        }
+                    }
                 }
-            }
 
-            state.error?.let { Text(it, color = Color.Red, modifier = Modifier.padding(top = 8.dp)) }
+                OutlinedTextField(value = machineName, onValueChange = { machineName = it }, label = { Text("Machine Name") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                OutlinedTextField(value = regNumber, onValueChange = { regNumber = it }, label = { Text("Registration Number") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                
+                Text("Location", fontWeight = FontWeight.Bold, color = GreenPrimary)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { 
+                            latitude = 11.0168
+                            longitude = 76.9558
+                            address = "Coimbatore, Tamil Nadu"
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE8F5E9), contentColor = GreenPrimary),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.MyLocation, null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Current", fontSize = 12.sp)
+                    }
+                    Button(
+                        onClick = { showMapPicker = true },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE3F2FD), contentColor = Color(0xFF1976D2)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Map, null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Map", fontSize = 12.sp)
+                    }
+                }
+                
+                if (address.isNotEmpty()) {
+                    Text(address, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                }
+
+                Text("Rental Details", fontWeight = FontWeight.Bold, color = GreenPrimary)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(value = price, onValueChange = { price = it }, label = { Text("Price (₹)") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(12.dp))
+                    
+                    var unitExpanded by remember { mutableStateOf(false) }
+                    val units = listOf("Per Hour", "Half Day", "Full Day")
+                    ExposedDropdownMenuBox(expanded = unitExpanded, onExpandedChange = { unitExpanded = !unitExpanded }, modifier = Modifier.weight(1f)) {
+                        OutlinedTextField(
+                            value = unit,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Unit") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = unitExpanded) },
+                            modifier = Modifier.fillMaxWidth().menuAnchor(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        ExposedDropdownMenu(expanded = unitExpanded, onDismissRequest = { unitExpanded = false }) {
+                            units.forEach { u ->
+                                DropdownMenuItem(text = { Text(u) }, onClick = { unit = u; unitExpanded = false })
+                            }
+                        }
+                    }
+                }
+
+                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description") }, modifier = Modifier.fillMaxWidth().height(120.dp), shape = RoundedCornerShape(12.dp))
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (state.isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally), color = GreenPrimary)
+                } else {
+                    Button(
+                        onClick = {
+                            if (machineName.isNotEmpty() && price.isNotEmpty() && latitude != 0.0) {
+                                viewModel.addMachinery(machineType, machineName, regNumber, price, unit, description, imageUri, latitude, longitude, address)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Add Machinery", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    }
+                }
+
+                state.error?.let { Text(it, color = Color.Red, modifier = Modifier.padding(top = 8.dp)) }
+            }
+        }
+    }
+}
+
+@Composable
+fun MapPicker(onLocationSelected: (LatLng) -> Unit, onDismiss: () -> Unit) {
+    var markerPosition by remember { mutableStateOf(LatLng(11.0168, 76.9558)) }
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(markerPosition, 10f)
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraPositionState,
+            onMapClick = { markerPosition = it }
+        ) {
+            Marker(
+                state = rememberMarkerState(position = markerPosition),
+                title = "Machinery Location"
+            )
+        }
+
+        Column(modifier = Modifier.align(Alignment.BottomCenter).padding(24.dp)) {
+            Button(onClick = { onLocationSelected(markerPosition) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary)) {
+                Text("Confirm Location")
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                Text("Cancel")
+            }
         }
     }
 }

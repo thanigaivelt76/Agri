@@ -34,167 +34,200 @@ fun LoginScreen(
     var mobileNumber by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White)
-    ) {
-        // Top Illustration Section
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(0.4f)
-                .background(GreenPrimary.copy(alpha = 0.05f))
-        ) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.app_logo),
-                    contentDescription = null,
-                    modifier = Modifier.size(180.dp)
-                )
-                Text(
-                    text = "Uzhavu Thozhan",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = GreenPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "உழவரின் வளர்ச்சி, நம் நாட்டின் வளம்",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = GreenPrimary
-                )
-            }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            errorMessage = null
         }
+    }
 
-        // Login Form Section
-        Card(
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(0.6f)
-                .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                .padding(padding)
+                .fillMaxSize()
+                .background(Color.White)
         ) {
-            Column(
+            // Top Illustration Section
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxWidth()
+                    .weight(0.4f)
+                    .background(GreenPrimary.copy(alpha = 0.05f))
             ) {
-                Text(
-                    text = "Welcome Back!",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Login to continue to your account",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray
-                )
-
-                Spacer(modifier = Modifier.height(32.dp))
-
-                OutlinedTextField(
-                    value = mobileNumber,
-                    onValueChange = { mobileNumber = it },
-                    label = { Text("Enter Mobile Number") },
-                    leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text("Enter Password") },
-                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-                    trailingIcon = {
-                        val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
-                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                            Icon(imageVector = image, contentDescription = null)
-                        }
-                    },
-                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                Text(
-                    text = "Forgot Password?",
-                    modifier = Modifier
-                        .align(Alignment.End)
-                        .padding(top = 8.dp)
-                        .clickable { },
-                    color = GreenPrimary,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Button(
-                    onClick = onLoginClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary),
-                    shape = RoundedCornerShape(12.dp)
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    Text("Login", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                OutlinedButton(
-                    onClick = { },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(width = 1.dp)
-                ) {
-                    Icon(Icons.Default.PhonelinkRing, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Login with OTP")
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                OutlinedButton(
-                    onClick = onGoogleLoginClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(width = 1.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AccountCircle,
+                    Image(
+                        painter = painterResource(id = R.drawable.app_logo),
                         contentDescription = null,
-                        tint = Color.Unspecified // Or use a proper Google icon if available
+                        modifier = Modifier.size(180.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Sign in with Google")
-                }
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                Row {
-                    Text("Don't have an account? ", color = Color.Gray)
                     Text(
-                        text = "Sign Up",
+                        text = "Uzhavu Thozhan",
+                        style = MaterialTheme.typography.headlineMedium,
                         color = GreenPrimary,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.clickable { onSignUpClick() }
+                        fontWeight = FontWeight.Bold
                     )
+                    Text(
+                        text = "உழவரின் வளர்ச்சி, நம் நாட்டின் வளம்",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = GreenPrimary
+                    )
+                }
+            }
+
+            // Login Form Section
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(0.6f)
+                    .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Welcome Back!",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Login to continue to your account",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Gray
+                    )
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    OutlinedTextField(
+                        value = mobileNumber,
+                        onValueChange = { mobileNumber = it },
+                        label = { Text("Enter Mobile Number") },
+                        leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("Enter Password") },
+                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                        trailingIcon = {
+                            val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(imageVector = image, contentDescription = null)
+                            }
+                        },
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    Text(
+                        text = "Forgot Password?",
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .padding(top = 8.dp)
+                            .clickable { },
+                        color = GreenPrimary,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Button(
+                        onClick = {
+                            when {
+                                mobileNumber.isEmpty() && password.isEmpty() -> {
+                                    errorMessage = "Please enter phone number and password"
+                                }
+                                mobileNumber.isEmpty() -> {
+                                    errorMessage = "Please enter your phone number"
+                                }
+                                password.isEmpty() -> {
+                                    errorMessage = "Please enter your password"
+                                }
+                                mobileNumber.length < 10 -> {
+                                    errorMessage = "Please enter a valid phone number"
+                                }
+                                else -> {
+                                    onLoginClick()
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Login", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    OutlinedButton(
+                        onClick = { },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(width = 1.dp)
+                    ) {
+                        Icon(Icons.Default.PhonelinkRing, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Login with OTP")
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    OutlinedButton(
+                        onClick = onGoogleLoginClick,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(width = 1.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = null,
+                            tint = Color.Unspecified
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Sign in with Google")
+                    }
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    Row {
+                        Text("Don't have an account? ", color = Color.Gray)
+                        Text(
+                            text = "Sign Up",
+                            color = GreenPrimary,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable { onSignUpClick() }
+                        )
+                    }
                 }
             }
         }
