@@ -1,7 +1,6 @@
 package com.example.agriproject.presentation.machinery
 
 import android.Manifest
-import android.content.Context
 import android.location.Geocoder
 import android.net.Uri
 import android.util.Log
@@ -27,103 +26,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import com.example.agriproject.data.model.Machinery
-import com.example.agriproject.data.repository.MachineryRepository
 import com.example.agriproject.ui.theme.GreenPrimary
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.storage.FirebaseStorage
 import com.google.maps.android.compose.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import java.util.Locale
-import java.util.UUID
-
-class AddMachineryViewModel : ViewModel() {
-    private val auth = FirebaseAuth.getInstance()
-    private val storage = FirebaseStorage.getInstance()
-    private val repository = MachineryRepository()
-
-    private val _state = MutableStateFlow(AddMachineryState())
-    val state = _state.asStateFlow()
-
-    private val TAG = "AddMachineryViewModel"
-
-    fun addMachinery(
-        type: String,
-        name: String,
-        regNumber: String,
-        price: String,
-        unit: String,
-        description: String,
-        imageUri: Uri?,
-        latitude: Double,
-        longitude: Double,
-        address: String
-    ) {
-        val userId = auth.currentUser?.uid ?: return
-        viewModelScope.launch {
-            _state.value = _state.value.copy(isLoading = true)
-            try {
-                var imageUrl: String? = null
-                
-                if (imageUri != null) {
-                    try {
-                        val fileName = "machinery_images/${UUID.randomUUID()}.jpg"
-                        val ref = storage.reference.child(fileName)
-                        Log.d(TAG, "Uploading image to: $fileName")
-                        
-                        // Use putFile with simplified metadata
-                        val uploadTask = ref.putFile(imageUri).await()
-                        imageUrl = ref.downloadUrl.await().toString()
-                        Log.d(TAG, "Upload success. URL: $imageUrl")
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Storage error: ${e.message}", e)
-                        throw Exception("Image upload failed. Please ensure you have a stable internet connection and Firebase Storage is enabled.")
-                    }
-                }
-
-                val machinery = Machinery(
-                    ownerId = userId,
-                    ownerName = auth.currentUser?.displayName ?: "Owner",
-                    type = type,
-                    name = name,
-                    registrationNumber = regNumber,
-                    phoneNumber = auth.currentUser?.phoneNumber ?: "",
-                    imageUrl = imageUrl,
-                    latitude = latitude,
-                    longitude = longitude,
-                    address = address,
-                    price = price.toDoubleOrNull() ?: 0.0,
-                    rentalUnit = unit,
-                    description = description
-                )
-
-                repository.addMachinery(machinery).onSuccess {
-                    _state.value = _state.value.copy(isLoading = false, isSuccess = true)
-                }.onFailure { e ->
-                    _state.value = _state.value.copy(isLoading = false, error = "Failed to save details: ${e.localizedMessage}")
-                }
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(isLoading = false, error = e.localizedMessage)
-            }
-        }
-    }
-}
-
-data class AddMachineryState(
-    val isLoading: Boolean = false,
-    val isSuccess: Boolean = false,
-    val error: String? = null
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -159,12 +69,13 @@ fun AddMachineryScreen(
                         longitude = it.longitude
                         
                         val geocoder = Geocoder(context, Locale.getDefault())
+                        @Suppress("DEPRECATION")
                         val addresses = geocoder.getFromLocation(it.latitude, it.longitude, 1)
                         if (addresses?.isNotEmpty() == true) {
                             val addr = addresses[0]
                             val city = addr.locality ?: addr.subAdminArea ?: ""
-                            val state = addr.adminArea ?: ""
-                            address = if (city.isNotEmpty()) "$city, $state" else state
+                            val stateName = addr.adminArea ?: ""
+                            address = if (city.isNotEmpty()) "$city, $stateName" else stateName
                         } else {
                             address = "${"%.4f".format(latitude)}, ${"%.4f".format(longitude)}"
                         }
@@ -189,12 +100,13 @@ fun AddMachineryScreen(
                 longitude = latLng.longitude
                 
                 val geocoder = Geocoder(context, Locale.getDefault())
+                @Suppress("DEPRECATION")
                 val addresses = geocoder.getFromLocation(latLng.latitude, latLng.longitude, 1)
                 if (addresses?.isNotEmpty() == true) {
                     val addr = addresses[0]
                     val city = addr.locality ?: addr.subAdminArea ?: ""
-                    val state = addr.adminArea ?: ""
-                    address = if (city.isNotEmpty()) "$city, $state" else state
+                    val stateName = addr.adminArea ?: ""
+                    address = if (city.isNotEmpty()) "$city, $stateName" else stateName
                 } else {
                     address = "Manual Location Selected"
                 }
@@ -327,19 +239,15 @@ fun AddMachineryScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 if (state.isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally), color = GreenPrimary)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                        CircularProgressIndicator(color = GreenPrimary)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Uploading Machine (${state.uploadProgress.toInt()}%)", fontSize = 12.sp, color = GreenPrimary)
+                    }
                 } else {
                     Button(
                         onClick = {
-                            if (machineName.isNotEmpty() && price.isNotEmpty() && latitude != 0.0) {
-                                viewModel.addMachinery(machineType, machineName, regNumber, price, unit, description, imageUri, latitude, longitude, address)
-                            } else {
-                                // Explicitly check for location
-                                if (latitude == 0.0) {
-                                    // Normally you'd show a Snackbar here
-                                    Log.e("AddMachinery", "Location not selected")
-                                }
-                            }
+                            viewModel.addMachinery(machineType, machineName, regNumber, price, unit, description, imageUri, latitude, longitude, address)
                         },
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary),
@@ -349,7 +257,11 @@ fun AddMachineryScreen(
                     }
                 }
 
-                state.error?.let { Text(it, color = Color.Red, modifier = Modifier.padding(top = 8.dp)) }
+                state.error?.let { 
+                    Surface(color = Color(0xFFFFEBEE), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                        Text(it, color = Color.Red, fontSize = 12.sp, modifier = Modifier.padding(12.dp))
+                    }
+                }
             }
         }
     }
@@ -379,7 +291,7 @@ fun MapPicker(onLocationSelected: (LatLng) -> Unit, onDismiss: () -> Unit) {
                 Text("Confirm Location")
             }
             Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Black)) {
                 Text("Cancel")
             }
         }
