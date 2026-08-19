@@ -16,7 +16,7 @@ class MachineryRepository {
     private val bookingCollection = firestore.collection("machineryBookings")
 
     suspend fun addMachinery(machinery: Machinery): Result<Unit> = try {
-        machineryCollection.add(machinery).await()
+        machineryCollection.document(machinery.id).set(machinery).await()
         Result.success(Unit)
     } catch (e: Exception) {
         Result.failure(e)

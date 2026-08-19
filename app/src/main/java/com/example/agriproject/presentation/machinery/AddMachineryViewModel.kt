@@ -5,12 +5,15 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
+import android.webkit.MimeTypeMap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.agriproject.data.model.Machinery
 import com.example.agriproject.data.repository.MachineryRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageMetadata
+import com.google.firebase.storage.StorageException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +21,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
 import java.util.UUID
 
 data class AddMachineryState(
@@ -31,11 +36,12 @@ class AddMachineryViewModel(application: Application) : AndroidViewModel(applica
     private val auth = FirebaseAuth.getInstance()
     private val storage = FirebaseStorage.getInstance()
     private val repository = MachineryRepository()
+    private val contentResolver = application.contentResolver
 
     private val _state = MutableStateFlow(AddMachineryState())
     val state = _state.asStateFlow()
 
-    private val TAG = "AddMachineryViewModel"
+    private val TAG = "MachineryUpload"
 
     fun addMachinery(
         type: String,
@@ -51,7 +57,7 @@ class AddMachineryViewModel(application: Application) : AndroidViewModel(applica
     ) {
         val user = auth.currentUser
         if (user == null) {
-            _state.value = _state.value.copy(error = "User not authenticated. Please login again.")
+            _state.value = _state.value.copy(error = "Please login before adding machinery.")
             return
         }
 
@@ -63,34 +69,65 @@ class AddMachineryViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, error = null, uploadProgress = 0f)
             try {
+                // 1. Validate Uri and open stream
+                val inputStream = withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(imageUri)
+                }
+                if (inputStream == null) {
+                    throw Exception("Unable to open image file. Please try selecting it again.")
+                }
+                inputStream.close()
+
                 val userId = user.uid
                 val machineId = UUID.randomUUID().toString()
                 
-                // 1. Process and Compress Image
-                val imageData = withContext(Dispatchers.IO) {
-                    compressImage(imageUri)
-                } ?: throw Exception("Unable to process image. Please choose another photo.")
+                // 2. Detect MIME type and extension
+                val mimeType = contentResolver.getType(imageUri) ?: "image/jpeg"
+                val extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType) ?: "jpg"
 
-                // 2. Upload to Firebase Storage: machinery/{userId}/{machineId}.jpg
-                val storagePath = "machinery/$userId/$machineId.jpg"
-                val ref = storage.reference.child(storagePath)
+                // 3. Process and Compress Image if needed
+                // We'll compress to a temporary file to use putFile as requested
+                val tempFile = withContext(Dispatchers.IO) {
+                    compressImageToTempFile(imageUri, machineId, extension)
+                } ?: throw Exception("Image processing failed.")
+
+                // 4. Create unique Storage path: machinery_images/{userId}/{machineId}.jpg
+                val storagePath = "machinery_images/$userId/$machineId.$extension"
+                val storageRef = storage.reference.child(storagePath)
                 
-                Log.d(TAG, "Uploading image to: $storagePath")
+                val metadata = StorageMetadata.Builder()
+                    .setContentType(mimeType)
+                    .build()
+
+                Log.d(TAG, "Starting upload to: $storagePath")
                 
-                val uploadTask = ref.putBytes(imageData)
+                // 5. Upload using putFile
+                val uploadTask = storageRef.putFile(Uri.fromFile(tempFile), metadata)
                 
-                // Optional: Track progress
                 uploadTask.addOnProgressListener { taskSnapshot ->
-                    val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount).toFloat()
-                    _state.value = _state.value.copy(uploadProgress = progress)
+                    if (taskSnapshot.totalByteCount > 0) {
+                        val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount).toFloat()
+                        _state.value = _state.value.copy(uploadProgress = progress)
+                    }
                 }
 
-                uploadTask.await()
+                try {
+                    uploadTask.await()
+                    Log.d(TAG, "Upload completed successfully")
+                } catch (e: Exception) {
+                    if (e is StorageException) {
+                        Log.e(TAG, "Firebase Storage Error: Code ${e.errorCode}, Message: ${e.message}", e)
+                    } else {
+                        Log.e(TAG, "Upload task failed", e)
+                    }
+                    throw e
+                }
                 
-                val imageUrl = ref.downloadUrl.await().toString()
-                Log.d(TAG, "Upload success. URL: $imageUrl")
+                // 6. Get download URL ONLY after success
+                val downloadUrl = storageRef.downloadUrl.await().toString()
+                Log.d(TAG, "Download URL retrieved: $downloadUrl")
 
-                // 3. Prepare Machinery Object
+                // 7. Prepare Machinery Object
                 val machinery = Machinery(
                     id = machineId,
                     ownerId = userId,
@@ -99,7 +136,7 @@ class AddMachineryViewModel(application: Application) : AndroidViewModel(applica
                     name = name,
                     registrationNumber = regNumber,
                     phoneNumber = user.phoneNumber ?: "",
-                    imageUrl = imageUrl,
+                    imageUrl = downloadUrl,
                     latitude = latitude,
                     longitude = longitude,
                     address = address,
@@ -110,61 +147,68 @@ class AddMachineryViewModel(application: Application) : AndroidViewModel(applica
                     createdAt = System.currentTimeMillis()
                 )
 
-                // 4. Save to Firestore
-                Log.d(TAG, "Saving machinery to Firestore")
+                // 8. Save to Firestore
+                Log.d(TAG, "Saving machinery metadata to Firestore")
                 repository.addMachinery(machinery).onSuccess {
-                    Log.d(TAG, "Save success")
+                    Log.d(TAG, "Firestore save success")
                     _state.value = _state.value.copy(isLoading = false, isSuccess = true)
+                    tempFile.delete() // Clean up
                 }.onFailure { e ->
-                    Log.e(TAG, "Firestore error", e)
-                    _state.value = _state.value.copy(isLoading = false, error = "Failed to save details: ${e.localizedMessage}")
+                    Log.e(TAG, "Firestore save error", e)
+                    _state.value = _state.value.copy(isLoading = false, error = "Unable to save machinery details. Please try again.")
                 }
 
             } catch (e: Exception) {
-                Log.e(TAG, "Error in addMachinery", e)
-                _state.value = _state.value.copy(
-                    isLoading = false, 
-                    error = "Unable to upload image: ${e.localizedMessage ?: "Unknown error"}"
-                )
+                Log.e(TAG, "Add machinery failed", e)
+                val userFriendlyError = when {
+                    e is StorageException && e.errorCode == StorageException.ERROR_NOT_AUTHORIZED -> 
+                        "Permission denied. Please check your storage rules."
+                    else -> "Unable to upload image. Please try again."
+                }
+                _state.value = _state.value.copy(isLoading = false, error = userFriendlyError)
             }
         }
     }
 
-    private fun compressImage(uri: Uri): ByteArray? {
-        return try {
-            val inputStream = getApplication<Application>().contentResolver.openInputStream(uri)
-            val originalBitmap = BitmapFactory.decodeStream(inputStream)
-            inputStream?.close()
+    private suspend fun compressImageToTempFile(uri: Uri, machineId: String, extension: String): File? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val inputStream = contentResolver.openInputStream(uri)
+                val originalBitmap = BitmapFactory.decodeStream(inputStream)
+                inputStream?.close()
 
-            if (originalBitmap == null) return null
+                if (originalBitmap == null) return@withContext null
 
-            // Resize if too large (Max 1200px side)
-            val maxSize = 1200
-            val width = originalBitmap.width
-            val height = originalBitmap.height
-            
-            val finalBitmap = if (width > maxSize || height > maxSize) {
-                val ratio = width.toFloat() / height.toFloat()
-                val newWidth: Int
-                val newHeight: Int
-                if (ratio > 1) {
-                    newWidth = maxSize
-                    newHeight = (maxSize / ratio).toInt()
-                } else {
-                    newHeight = maxSize
-                    newWidth = (maxSize * ratio).toInt()
+                // Resize if too large (Max 1280px side)
+                val maxSize = 1280
+                var width = originalBitmap.width
+                var height = originalBitmap.height
+                
+                if (width > maxSize || height > maxSize) {
+                    val ratio = width.toFloat() / height.toFloat()
+                    if (ratio > 1) {
+                        width = maxSize
+                        height = (maxSize / ratio).toInt()
+                    } else {
+                        height = maxSize
+                        width = (maxSize * ratio).toInt()
+                    }
                 }
-                Bitmap.createScaledBitmap(originalBitmap, newWidth, newHeight, true)
-            } else {
-                originalBitmap
+                
+                val scaledBitmap = Bitmap.createScaledBitmap(originalBitmap, width, height, true)
+                
+                val tempFile = File(getApplication<Application>().cacheDir, "temp_$machineId.$extension")
+                val outputStream = FileOutputStream(tempFile)
+                
+                val format = if (extension.lowercase() == "png") Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
+                scaledBitmap.compress(format, 85, outputStream)
+                outputStream.close()
+                
+                tempFile
+            } catch (e: Exception) {
+                Log.e(TAG, "Compression error", e)
+                null
             }
-
-            val outputStream = ByteArrayOutputStream()
-            finalBitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
-            outputStream.toByteArray()
-        } catch (e: Exception) {
-            Log.e(TAG, "Compression error", e)
-            null
         }
     }
 
